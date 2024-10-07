@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+
+import socket
+import sys
+
+def start_tcp_proxy(listen_port, server_ip, server_port):
+    # Create a TCP socket for the proxy
+    proxy_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    proxy_socket.bind(("", listen_port))
+    proxy_socket.listen(5)
+    print(f"TCP Proxy listening on port {listen_port}")
+
+    while True:
+        # Accept a client connection
+        client_socket, client_address = proxy_socket.accept()
+        print(f"Accepted TCP connection from {client_address}")
+
+        # Connect to the server
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_socket.connect((server_ip, server_port))
+
+        # Forward data between client and server
+        try:
+            while True:
+                client_data = client_socket.recv(4096)
+                if not client_data:
+                    break
+                server_socket.sendall(client_data)
+
+                server_data = server_socket.recv(4096)
+                if not server_data:
+                    break
+                client_socket.sendall(server_data)
+        finally:
+            client_socket.close()
+            server_socket.close()
+            print("Closed TCP connection")
+
+def start_udp_proxy(listen_port, server_ip, server_port):
+    # Create a UDP socket for the proxy
+    proxy_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    proxy_socket.bind(("", listen_port))
+    print(f"UDP Proxy listening on port {listen_port}")
+
+    while True:
+        # Receive data from the client
+        data, client_address = proxy_socket.recvfrom(4096)
+        print(f"Received from UDP client {client_address}: {data.decode()}")
+
+        # Forward the data to the server
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        server_socket.sendto(data, (server_ip, server_port))
+
+        # Receive the response from the server
+        server_response, _ = server_socket.recvfrom(4096)
+        print(f"Received from UDP server: {server_response.decode()}")
+
+        # Send the server's response back to the client
+        proxy_socket.sendto(server_response, client_address)
+
+if __name__ == "__main__":
+    if len(sys.argv) != 5:
+        print("Usage: ./proxy <tcp|udp> <listen-port> <server-ip> <server-port>")
+        sys.exit(1)
+
+    protocol = sys.argv[1].lower()
+    listen_port = int(sys.argv[2])
+    server_ip = sys.argv[3]
+    server_port = int(sys.argv[4])
+
+    if protocol == "tcp":
+        start_tcp_proxy(listen_port, server_ip, server_port)
+    elif protocol == "udp":
+        start_udp_proxy(listen_port, server_ip, server_port)
+    else:
+        print("Invalid protocol. Use 'tcp' or 'udp'.")
+        sys.exit(1)
+
